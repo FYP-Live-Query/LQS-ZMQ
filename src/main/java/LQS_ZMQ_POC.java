@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.sql.*;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -95,7 +96,7 @@ public class LQS_ZMQ_POC {
     //  .split main thread
     //  The main task starts the subscriber and publisher, and then sets
     //  itself up as a listening proxy. The listener runs as a child thread:
-    public static void main(String[] argv) throws IOException {
+    public static void main(String[] argv) throws IOException, SQLException {
         try (ZContext ctx = new ZContext()) {
             //  Start child threads
 //            ZThread.fork(ctx, new Publisher());
@@ -113,7 +114,29 @@ public class LQS_ZMQ_POC {
             // NB: child threads exit here when the context is closed
 
         }
-        Map<Long, TableMapEventData> longTableMapEventDataMap  = new HashMap<>();
+        Map<Long, String> longTableMapEventDataMap  = new HashMap<>();
+        String hostName = "10.8.100.246";
+        String dbName = "inventory";
+        String userName = "root";
+        String password = "debezium";
+        String port = "3306";
+        String jdbcUrl = "jdbc:mysql://" + hostName + ":" + port + "/" + dbName;
+
+        Connection connection = DriverManager.getConnection(jdbcUrl, userName, password);
+        Statement statement = connection.createStatement();
+        // Execute the selectSQL query and process the results
+
+        String query = "SELECT COLUMN_NAME, ORDINAL_POSITION FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'networkTraffic'";
+        ResultSet rs = statement.executeQuery(query);
+        while (rs.next()) {
+            // Do something with each row
+            String columnName = rs.getString("COLUMN_NAME");
+            Long ordinalPosition = Long.parseLong(rs.getString("ORDINAL_POSITION"));
+            longTableMapEventDataMap.put(ordinalPosition, columnName);
+//            System.out.println(columnName +" " +ordinalPosition);
+            // ...
+        }
+        
         BinaryLogClient client = new BinaryLogClient("10.8.100.246", 3306,"inventory", "root", "debezium");
         EventDeserializer eventDeserializer = new EventDeserializer();
 
