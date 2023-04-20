@@ -49,7 +49,7 @@ public class LQS_ZMQ_POC {
         {
             Socket publisher = ctx.createSocket(SocketType.PUB);
             publisher.bind("tcp://*:6000");
-            Map<Long, String> longTableMapEventDataMap  = new HashMap<>();
+            Map<Long, String> ordinalPositionAndColumnName  = new HashMap<>();
             String hostName = "10.8.100.246";
             String dbName = "inventory";
             String userName = "root";
@@ -66,7 +66,7 @@ public class LQS_ZMQ_POC {
                 while (rs.next()) {
                     String columnName = rs.getString("COLUMN_NAME");
                     Long ordinalPosition = Long.parseLong(rs.getString("ORDINAL_POSITION"));
-                    longTableMapEventDataMap.put(ordinalPosition, columnName);
+                    ordinalPositionAndColumnName.put(ordinalPosition, columnName);
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -76,12 +76,13 @@ public class LQS_ZMQ_POC {
             BinaryLogClient client = new BinaryLogClient("10.8.100.246", 3306,"inventory", "root", "debezium");
             EventDeserializer eventDeserializer = new EventDeserializer();
 
-            eventDeserializer.setCompatibilityMode(
-                    EventDeserializer.CompatibilityMode.DATE_AND_TIME_AS_LONG
-            );
+//            eventDeserializer.setCompatibilityMode(
+//                    EventDeserializer.CompatibilityMode.
+//            );
             client.setEventDeserializer(eventDeserializer);
 
             client.registerEventListener(event -> {
+                System.out.println(event);
 
                 JSONObject jsonValue = new JSONObject();
                 if(event.getHeader().getEventType().equals(EventType.EXT_WRITE_ROWS)) {
@@ -93,7 +94,7 @@ public class LQS_ZMQ_POC {
                                             if(rowAsArr[index] == null){
 
                                             }else {
-                                                jsonValue.put(longTableMapEventDataMap.get((long) index + 1), rowAsArr[index]);
+                                                jsonValue.put(ordinalPositionAndColumnName.get((long) index + 1), rowAsArr[index]);
                                             }
                                         });
                             }
