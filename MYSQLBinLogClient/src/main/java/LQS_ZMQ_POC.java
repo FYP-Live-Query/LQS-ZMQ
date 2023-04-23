@@ -25,7 +25,7 @@ public class LQS_ZMQ_POC {
         {
             //  Subscribe to "A" and "B"
             Socket subscriber = ctx.createSocket(SocketType.SUB);
-            subscriber.connect("tcp://localhost:6001");
+            subscriber.connect("tcp://localhost:5001");
             subscriber.subscribe("networkTraffic".getBytes(ZMQ.CHARSET));
 
             int count = 0;
@@ -48,7 +48,7 @@ public class LQS_ZMQ_POC {
         public void run(Object[] args, ZContext ctx, Socket pipe)
         {
             Socket publisher = ctx.createSocket(SocketType.PUB);
-            publisher.bind("tcp://*:6000");
+            publisher.bind("tcp://*:5000");
             Map<Long, String> ordinalPositionAndColumnName  = new HashMap<>();
             String hostName = "10.8.100.246";
             String dbName = "inventory";
@@ -87,7 +87,7 @@ public class LQS_ZMQ_POC {
                 JSONObject jsonValue = new JSONObject();
                 if(event.getHeader().getEventType().equals(EventType.EXT_WRITE_ROWS)) {
                     WriteRowsEventData eventData = event.getData();
-                    eventData.getRows().stream().forEach(
+                    eventData.getRows().forEach(
                             (rowAsArr) -> {
                                 IntStream.range(0, rowAsArr.length)
                                         .forEach(index -> {
@@ -97,17 +97,18 @@ public class LQS_ZMQ_POC {
                                                 jsonValue.put(ordinalPositionAndColumnName.get((long) index + 1), rowAsArr[index]);
                                             }
                                         });
+                                jsonValue.put("initial_data", "false"); // as required by the backend processing
+                                JSONObject obj = new JSONObject();
+                                obj.put("properties", jsonValue); // all user required data for siddhi processing inside properties section in JSON object
+                                String strMsg = obj.toString();
+                                String string = String.format("%s-%s", "networkTraffic" , strMsg);
+                                if (!publisher.send(string)) {
+                                    System.exit(0); //  Interrupted
+                                }
+                                System.out.println(System.currentTimeMillis() - (long) (eventData.getRows().get(0)[5]));
                             }
                     );
-                    jsonValue.put("initial_data", "false"); // as required by the backend processing
-                    JSONObject obj = new JSONObject();
-                    obj.put("properties", jsonValue); // all user required data for siddhi processing inside properties section in JSON object
-                    String strMsg = obj.toString();
-                    String string = String.format("%s-%s", "networkTraffic" , strMsg);
-                    if (!publisher.send(string)) {
-                        System.exit(0); //  Interrupted
-                    }
-                    System.out.println(System.currentTimeMillis() - (long) (eventData.getRows().get(0)[5]));
+
 
                 }
             });
@@ -125,40 +126,40 @@ public class LQS_ZMQ_POC {
     //  The listener receives all messages flowing through the proxy, on its
     //  pipe. In CZMQ, the pipe is a pair of ZMQ_PAIR sockets that connect
     //  attached child threads. In other languages your mileage may vary:
-    private static class Listener implements IAttachedRunnable
-    {
-        @Override
-        public void run(Object[] args, ZContext ctx, Socket pipe)
-        {
-            //  Print everything that arrives on pipe
-            while (true) {
-//                ZFrame frame = ZFrame.recvFrame(pipe);
-//                if (frame == null)
-//                    break; //  Interrupted
-////                frame.print(null);
-//                frame.destroy();
-            }
-        }
-    }
-
     //  .split main thread
     //  The main task starts the subscriber and publisher, and then sets
     //  itself up as a listening proxy. The listener runs as a child thread:
-    public static void main(String[] argv) throws IOException, SQLException {
-        try (ZContext ctx = new ZContext()) {
-            //  Start child threads
-            ZThread.fork(ctx, new Publisher());
-            ZThread.fork(ctx, new Subscriber());
+    public static void main(String[] argv) throws IOException, SQLException, InterruptedException {
+        double avg = 0;
+        double sum = 0;
+        long events = 0;
+        while(true) {
 
-            Socket subscriber = ctx.createSocket(SocketType.XSUB);
-            subscriber.connect("tcp://localhost:6000");
-            Socket publisher = ctx.createSocket(SocketType.XPUB);
-            publisher.bind("tcp://*:6001");
-            Socket listener = ZThread.fork(ctx, new Listener());
-            ZMQ.proxy(subscriber, publisher, listener);
+            long t1 = System.nanoTime(); // ---- time here t1 ------
+            long t2 = System.nanoTime(); // ---- time here t2 ------
 
-            System.out.println(" interrupted");
+            System.out.println(System.lineSeparator());
+            sum += ((double) t2 - t1);
+            events++;
+            avg = sum / events;
+            System.out.println("nanos spent from start of t1 measure to end of t2 assignment : " + (((double) t2 - t1) * 2) + " avg : " + avg);
+//            Thread.sleep(10);
         }
+
+//        try (ZContext ctx = new ZContext()) {
+//            //  Start child threads
+//            ZThread.fork(ctx, new Publisher());
+//            ZThread.fork(ctx, new Subscriber());
+//
+//            Socket subscriber = ctx.createSocket(SocketType.XSUB);
+//            subscriber.connect("tcp://localhost:5000");
+//            Socket publisher = ctx.createSocket(SocketType.XPUB);
+//            publisher.bind("tcp://*:5001");
+//            Socket listener = ZThread.fork(ctx, new Listener());
+//            ZMQ.proxy(subscriber, publisher, listener);
+//
+//            System.out.println(" interrupted");
+//        }
 
     }
 }
