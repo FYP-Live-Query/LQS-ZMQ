@@ -1,6 +1,6 @@
 package com.mahesh;
 
-import com.mahesh.publisher.Publisher;
+import com.mahesh.publisher.BinLog.BinLogMessagePublisher;
 import com.mahesh.subcriber.Subscriber;
 import org.zeromq.SocketType;
 import org.zeromq.ZContext;
@@ -31,7 +31,7 @@ public class ZMQServer {
     public static void main(String[] argv) throws IOException, SQLException {
         try (ZContext ctx = new ZContext()) {
             //  Start child threads
-            ZThread.fork(ctx, new Publisher());
+            ZThread.fork(ctx, new BinLogMessagePublisher());
             ZThread.fork(ctx, new Subscriber());
 
             ZMQ.Socket subscriber = ctx.createSocket(SocketType.XSUB);

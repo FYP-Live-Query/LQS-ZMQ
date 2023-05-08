@@ -1,22 +1,23 @@
-package com.mahesh.publisher;
+package com.mahesh.publisher.BinLog;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.EventType;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventDeserializer;
+import com.mahesh.publisher.IPublisher;
+import io.debezium.common.annotation.Incubating;
 import org.json.JSONObject;
 import org.zeromq.SocketType;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
-import org.zeromq.ZThread;
 
 import java.io.IOException;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.IntStream;
-
-public class Publisher implements ZThread.IAttachedRunnable
+@Incubating
+public class BinLogMessagePublisher implements IPublisher
 {
     @Override
     public void run(Object[] args, ZContext ctx, ZMQ.Socket pipe)
@@ -29,7 +30,7 @@ public class Publisher implements ZThread.IAttachedRunnable
         String userName = "root";
         String password = "debezium";
         String port = "3306";
-        String jdbcUrl = "jdbc:mysql://" + hostName + ":" + port + "/" + dbName;
+        String jdbcUrl = "jdbc:mysql://"+ userName + ":" + password + "@" + hostName + ":" + port + "/" + dbName;
         Connection connection;
         try {
             connection = DriverManager.getConnection(jdbcUrl, userName, password);
@@ -50,13 +51,13 @@ public class Publisher implements ZThread.IAttachedRunnable
         BinaryLogClient client = new BinaryLogClient("10.8.100.246", 3306,"inventory", "root", "debezium");
         EventDeserializer eventDeserializer = new EventDeserializer();
 
-//            eventDeserializer.setCompatibilityMode(
-//                    EventDeserializer.CompatibilityMode.
-//            );
+            eventDeserializer.setCompatibilityMode(
+                    EventDeserializer.CompatibilityMode.DATE_AND_TIME_AS_LONG
+            );
         client.setEventDeserializer(eventDeserializer);
 
         client.registerEventListener(event -> {
-            System.out.println(event);
+//            System.out.println(event);
 
             JSONObject jsonValue = new JSONObject();
             if(event.getHeader().getEventType().equals(EventType.EXT_WRITE_ROWS)) {
