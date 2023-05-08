@@ -1,4 +1,4 @@
-package com.mahesh.publisher.BinLog;
+package com.mahesh.publisher.Kafka;
 
 import com.mahesh.publisher.IPublisher;
 import io.debezium.common.annotation.Incubating;
