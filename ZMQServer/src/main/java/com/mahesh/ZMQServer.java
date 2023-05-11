@@ -1,11 +1,9 @@
 package com.mahesh;
 
 import com.mahesh.publisher.BinLog.BinLogMessagePublisher;
+import com.mahesh.publisher.Kafka.KafkaMessagePublisher;
 import com.mahesh.subcriber.Subscriber;
-import org.zeromq.SocketType;
-import org.zeromq.ZContext;
-import org.zeromq.ZMQ;
-import org.zeromq.ZThread;
+import org.zeromq.*;
 
 import java.io.IOException;
 import java.sql.*;
@@ -17,21 +15,21 @@ public class ZMQServer {
         @Override
         public void run(Object[] args, ZContext ctx, ZMQ.Socket pipe)
         {
-            //  Print everything that arrives on pipe
-//            while (true) {
-////                ZFrame frame = ZFrame.recvFrame(pipe);
-////                if (frame == null)
-////                    break; //  Interrupted
-//////                frame.print(null);
-////                frame.destroy();
-//            }
+//              Print everything that arrives on pipe
+            while (true) {
+                ZFrame frame = ZFrame.recvFrame(pipe);
+                if (frame == null)
+                    break; //  Interrupted
+                frame.print(null);
+                frame.destroy();
+            }
         }
     }
 
     public static void main(String[] argv) throws IOException, SQLException {
         try (ZContext ctx = new ZContext()) {
             //  Start child threads
-            ZThread.fork(ctx, new BinLogMessagePublisher());
+            ZThread.fork(ctx, new KafkaMessagePublisher("10.8.100.246:9092","dbserver1.inventory.networkTraffic"));
             ZThread.fork(ctx, new Subscriber());
 
             ZMQ.Socket subscriber = ctx.createSocket(SocketType.XSUB);
