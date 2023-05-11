@@ -6,6 +6,7 @@ import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventDeserializer;
 import com.mahesh.publisher.IPublisher;
 import io.debezium.common.annotation.Incubating;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.json.JSONObject;
 import org.zeromq.SocketType;
 import org.zeromq.ZContext;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.IntStream;
 @Incubating
+@InterfaceStability.Unstable
 public class BinLogMessagePublisher implements IPublisher
 {
     @Override

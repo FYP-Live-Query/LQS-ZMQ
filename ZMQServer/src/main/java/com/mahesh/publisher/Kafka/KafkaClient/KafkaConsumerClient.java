@@ -38,6 +38,7 @@ public class KafkaConsumerClient<KeyType,ValueType> implements IStreamingEngine<
         activeConsumerRecordHandler.start();
         while(!waitingInterrupted.get()) {
             synchronized (lock) {
+
                 try {
                     ConsumerRecords<KeyType, ValueType> consumerRecords = kafkaConsumer.poll(Duration.ofMillis(10000));
                     activeConsumerRecordHandler.addConsumerRecords(consumerRecords);

@@ -41,7 +41,6 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
                                 String stringJsonMsg = consumerRecord.value().toString();
                                 JSONObject jsonObject = new JSONObject(stringJsonMsg);
                                 JSONObject newValue = (JSONObject) ((JSONObject) jsonObject.get("payload")).get("after");
-                                System.out.println(stringJsonMsg);
 
                                 newValue.put("initial_data", "false"); // as required by the backend processing
 
