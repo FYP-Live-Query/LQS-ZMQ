@@ -4,49 +4,80 @@ import com.mahesh.publisher.IPublisher;
 import com.mahesh.publisher.Kafka.KafkaClient.ActiveConsumerRecodHandling.ActiveConsumerRecordHandler;
 import com.mahesh.publisher.Kafka.KafkaClient.AutoOffsetResetConfig;
 import com.mahesh.publisher.Kafka.KafkaClient.KafkaConsumerClient;
-import io.debezium.common.annotation.Incubating;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.zeromq.SocketType;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
 
-import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-@Incubating
 public class KafkaMessagePublisher implements IPublisher
 {
-    KafkaConsumerClient<String,String> kafkaConsumerClient;
+    private final KafkaConsumerClient<String,String> KAFKA_CONSUMER_CLIENT;
+    private final String PORT;
+    private final String TOPIC_NAME;
+    private static final AtomicInteger publishers = new AtomicInteger(0);
 
-    public KafkaMessagePublisher(String hostName, String topicName){
-        this.kafkaConsumerClient = KafkaConsumerClient.<String,String>builder()
+    public KafkaMessagePublisher(final String hostName, final String topicName, final String port){
+
+        publishers.incrementAndGet();
+
+        this.PORT = port;
+
+        BlockingQueue<Runnable> runnablesBlockingQueue
+                = new ArrayBlockingQueue<>(10); // for executor service
+        ExecutorService executorService =
+                new ThreadPoolExecutor(
+                        Runtime.getRuntime().availableProcessors(),
+                        Runtime.getRuntime().availableProcessors(),
+                        100,
+                        TimeUnit.MILLISECONDS,
+                        runnablesBlockingQueue
+                );
+
+        this.TOPIC_NAME = topicName;
+
+        ActiveConsumerRecordHandler<String,String> activeConsumerRecordHandler =
+                new ActiveConsumerRecordHandler<>(executorService);
+
+        this.KAFKA_CONSUMER_CLIENT = KafkaConsumerClient.<String,String>builder()
                 .bootstrap_server_config(hostName) // should we obtain hostname from Config management system?
                 .key_deserializer_class_config(StringDeserializer.class)
                 .value_deserializer_class_config(StringDeserializer.class)
-                .group_id_config("siddhi-io-live-group-" + UUID.randomUUID()) // new subscriber should be in new group for multicasts subscription
-                .client_id_config("siddhi-io-live-group-client-" + UUID.randomUUID()) // new subscriber should be in new group for multicasts subscriptio
+                .group_id_config("zmq-pub-group-" + UUID.randomUUID()) // new subscriber should be in new group for multicasts subscription
+                .client_id_config("zmq-pub-group-client-" + UUID.randomUUID()) // new subscriber should be in new group for multicasts subscriptio
                 .topic(topicName) // should add table name
                 .auto_offset_reset_config(AutoOffsetResetConfig.LATEST)
-                .activeConsumerRecordHandler(new ActiveConsumerRecordHandler<>())
+                .activeConsumerRecordHandler(activeConsumerRecordHandler)
                 .build();
     }
     @Override
     public void run(Object[] args, ZContext ctx, ZMQ.Socket pipe)
     {
         ZMQ.Socket publisher = ctx.createSocket(SocketType.PUB);
-        publisher.bind("tcp://*:6000");
-        Random rand = new Random(System.currentTimeMillis());
-        System.out.println(rand);
-        Consumer<String> consumer = o -> {
-            String string = String.format("%s:%s","networkTraffic", o);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> publisher.unbind("tcp://*:" + PORT)));
+
+        publisher.bind("tcp://*:" + this.PORT);
+        Consumer<String> consumer = message -> {
+            String stringMessage = String.format("%s:%s",this.TOPIC_NAME, message);
             try {
-                publisher.send(string);
+                publisher.send(stringMessage);
             }catch (Exception e){
                 e.printStackTrace();
             }
         };
-        kafkaConsumerClient.subscribe();
-        kafkaConsumerClient.consumeMessage(consumer);
+
+        KAFKA_CONSUMER_CLIENT.subscribe();
+        KAFKA_CONSUMER_CLIENT.consumeMessage(consumer);
     }
+
+
+    public static int getNumOfPublishers() {
+        return publishers.get();
+    }
+
 }

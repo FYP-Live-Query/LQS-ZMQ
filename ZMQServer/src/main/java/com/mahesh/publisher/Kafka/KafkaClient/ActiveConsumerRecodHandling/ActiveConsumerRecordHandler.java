@@ -1,11 +1,9 @@
 package com.mahesh.publisher.Kafka.KafkaClient.ActiveConsumerRecodHandling;
 
-import com.google.common.reflect.TypeToken;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.tapestry5.json.JSONObject;
 
-import java.lang.reflect.Type;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
@@ -13,26 +11,17 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
     private final BlockingQueue<ConsumerRecords<KeyType, ValueType>> consumerRecordsList;
     private Consumer<ValueType> consumer;
     private final ExecutorService executorService;
-    private final TypeToken<ValueType> typeToken = new TypeToken<ValueType>(getClass()) { };
-    private final Type type = typeToken.getType(); // or getRawType() to return Class<? super T>
 
-    public Type getType() {
-        return type;
-    }
-
-    public ActiveConsumerRecordHandler() {
+    public ActiveConsumerRecordHandler(ExecutorService executorService) {
         this.consumerRecordsList = new LinkedBlockingQueue<>();
-        BlockingQueue<Runnable> runnablesBlockingQueue = new ArrayBlockingQueue<>(10); // for executor service
-        this.executorService = new ThreadPoolExecutor(Runtime.getRuntime().availableProcessors(),Runtime.getRuntime().availableProcessors(),100, TimeUnit.MILLISECONDS, runnablesBlockingQueue);
+        this.executorService = executorService;
     }
 
     public void start(){
-            if(consumer == null){
-                throw new IllegalArgumentException("Consumer for message not set");
-            }
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
+        if(consumer == null){
+            throw new IllegalArgumentException("Consumer for message not set");
+        }
+        Thread thread = new Thread(() -> {
                 while (true) {
                     try {
                         ConsumerRecords<KeyType, ValueType> consumerRecords = consumerRecordsList.take();
@@ -41,6 +30,7 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
                                 String stringJsonMsg = consumerRecord.value().toString();
                                 JSONObject jsonObject = new JSONObject(stringJsonMsg);
                                 JSONObject newValue = (JSONObject) ((JSONObject) jsonObject.get("payload")).get("after");
+                                jsonObject.clear();
 
                                 newValue.put("initial_data", "false"); // as required by the backend processing
 
@@ -56,9 +46,8 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
                     }
                 }
             }
-        }
         );
-            thread.start();
+        thread.start();
         }
 
     public void setConsumer(Consumer<ValueType> consumer) {
