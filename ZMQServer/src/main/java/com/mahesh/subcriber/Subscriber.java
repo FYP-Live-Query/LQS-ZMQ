@@ -12,7 +12,7 @@ public class Subscriber implements ZThread.IAttachedRunnable
     {
         //  Subscribe to "A" and "B"
         ZMQ.Socket subscriber = ctx.createSocket(SocketType.SUB);
-        subscriber.connect("tcp://localhost:6000");
+        subscriber.connect("tcp://localhost:6001");
         subscriber.subscribe("networkTraffic".getBytes(ZMQ.CHARSET));
 
         int count = 0;
