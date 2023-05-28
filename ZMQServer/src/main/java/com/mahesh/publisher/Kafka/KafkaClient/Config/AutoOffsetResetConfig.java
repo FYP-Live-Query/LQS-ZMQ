@@ -1,4 +1,4 @@
-package com.mahesh.publisher.Kafka.KafkaClient;
+package com.mahesh.publisher.Kafka.KafkaClient.Config;
 
 public enum AutoOffsetResetConfig {
     LATEST("latest"),

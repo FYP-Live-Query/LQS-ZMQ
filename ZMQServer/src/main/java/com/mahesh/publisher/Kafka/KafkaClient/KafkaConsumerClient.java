@@ -2,12 +2,15 @@ package com.mahesh.publisher.Kafka.KafkaClient;
 
 import com.mahesh.publisher.IStreamingEngine;
 import com.mahesh.publisher.Kafka.KafkaClient.ActiveConsumerRecodHandling.ActiveConsumerRecordHandler;
+import com.mahesh.publisher.Kafka.KafkaClient.Config.AutoOffsetResetConfig;
 import lombok.Builder;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 import java.time.Duration;
@@ -28,6 +31,7 @@ public class KafkaConsumerClient<KeyType,ValueType> implements IStreamingEngine<
     private String topic;
     private final AtomicBoolean waitingInterrupted = new AtomicBoolean(false);
     private ActiveConsumerRecordHandler<KeyType,ValueType> activeConsumerRecordHandler;
+    private final Logger logger = LoggerFactory.getLogger(KafkaConsumerClient.class);
 
     private final Object lock = new Object();
 
@@ -38,7 +42,6 @@ public class KafkaConsumerClient<KeyType,ValueType> implements IStreamingEngine<
         activeConsumerRecordHandler.start();
         while(!waitingInterrupted.get()) {
             synchronized (lock) {
-
                 try {
                     ConsumerRecords<KeyType, ValueType> consumerRecords = kafkaConsumer.poll(Duration.ofMillis(10000));
                     activeConsumerRecordHandler.addConsumerRecords(consumerRecords);
@@ -74,6 +77,7 @@ public class KafkaConsumerClient<KeyType,ValueType> implements IStreamingEngine<
                 this.initiateKafkaConsumer();
             }
             kafkaConsumer.subscribe(Collections.singleton(topic));
+            logger.info("subscribed to kafka topic : [" + topic + "]");
         }
     }
 
@@ -85,6 +89,7 @@ public class KafkaConsumerClient<KeyType,ValueType> implements IStreamingEngine<
                 return;
             }
             kafkaConsumer.unsubscribe();
+            logger.info("unsubscribed to kafka topic : [" + topic + "]");
         }
     }
 

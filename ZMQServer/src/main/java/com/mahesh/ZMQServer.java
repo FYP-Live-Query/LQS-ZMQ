@@ -53,7 +53,7 @@ public class ZMQServer {
             new Thread(() -> {
                 try {
                     while (!Thread.interrupted()) {
-                        Thread.sleep(10000);
+                        Thread.sleep(100000);
                         Iterator<Map.Entry<String, String>> iterator = topicsPlusPortsMap.entrySet().iterator();
                         logger.info("live publishers listing.");
                         while (iterator.hasNext()) {
