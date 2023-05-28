@@ -15,21 +15,6 @@ import java.util.Map;
 
 public class ZMQServer {
 
-    private static class Listener implements ZThread.IAttachedRunnable
-    {
-        @Override
-        public void run(Object[] args, ZContext ctx, ZMQ.Socket pipe)
-        {
-//              Print everything that arrives on pipe
-            while (true) {
-                ZFrame frame = ZFrame.recvFrame(pipe);
-                if (frame == null)
-                    break; //  Interrupted
-                frame.print(null);
-                frame.destroy();
-            }
-        }
-    }
 
     public static void main(String[] argv) throws Exception {
 
@@ -62,12 +47,17 @@ public class ZMQServer {
             new Thread(() -> {
                 try {
                     while (!Thread.interrupted()) {
-                        Thread.sleep(100000);
+                        Thread.sleep(10000);
                         Iterator<Map.Entry<String, String>> iterator = topicsPlusPortsMap.entrySet().iterator();
+                        Iterator<Map.Entry<String, Integer>> iteratored = topicsAndNumOfSubs.entrySet().iterator();
                         logger.info("live publishers listing.");
                         while (iterator.hasNext()) {
                             Map.Entry<String, String> kv = iterator.next();
-                            logger.info(String.format("[topic : %s] : [port : %s]", kv.getValue(), kv.getKey()));
+                            logger.info(String.format("[topic : %s] : [port : %s]", kv.getKey(), kv.getValue()));
+                        }
+                        while (iteratored.hasNext()) {
+                            Map.Entry<String, Integer> kv = iteratored.next();
+                            logger.info(String.format("[topic : %s] : [subs : %s]", kv.getKey(), kv.getValue()));
                         }
                     }
                 } catch (InterruptedException e) {
@@ -81,7 +71,6 @@ public class ZMQServer {
 
                 logger.info("Subscriber connected.");
                 logger.info("Received message " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
-
                 String response;
                 JSONObject request = new JSONObject(new String(reply, ZMQ.CHARSET));
                 int numOfSubscribers = 0;
@@ -89,19 +78,22 @@ public class ZMQServer {
 
                 if (topicsPlusPortsMap.containsKey(zmqTopic)) {
                     numOfSubscribers = topicsAndNumOfSubs.get(zmqTopic);
-                    if(numOfSubscribers >= subscribersLoadFactor * idealNumOfSubscribers) {
+                    if(((double) numOfSubscribers ) % (subscribersLoadFactor * idealNumOfSubscribers) ==  0.0) {
                         topicPublishingStartingPort++;
                         ZThread.fork(
                                 context,
                                 new KafkaMessagePublisher(request.getString("kafka.server.host"),
                                         zmqTopic,
                                         String.valueOf(topicPublishingStartingPort)));
-                        topicsPlusPortsMap.put(zmqTopic,topicsPlusPortsMap.get(zmqTopic) + "," + String.valueOf(topicPublishingStartingPort));
-                        topicsAndNumOfSubs.put(zmqTopic,numOfSubscribers++);
+                        topicsPlusPortsMap.put(zmqTopic, String.valueOf(topicPublishingStartingPort));
+                        topicsAndNumOfSubs.put(zmqTopic,++numOfSubscribers);
+                        response = request.put("port",String.valueOf(topicPublishingStartingPort)).toString();
+                    } else {
+                        topicsAndNumOfSubs.put(zmqTopic,++numOfSubscribers);
+                        logger.info(String.format("Topic '%s' already created ", request.getString("topic")));
+                        response = request.put("port",
+                                topicsPlusPortsMap.get(request.getString("topic"))).toString();
                     }
-
-                    logger.info(String.format("Topic '%s' already created ", request.getString("topic")));
-                    response = request.put("port",topicsPlusPortsMap.get(request.getString("topic"))).toString();
 
                 } else {
 
@@ -113,7 +105,7 @@ public class ZMQServer {
                                     String.valueOf(topicPublishingStartingPort)));
                     logger.info(String.format("Publisher for topic '%s' created and live on port %d.", request.getString("topic"), topicPublishingStartingPort));
                     topicsPlusPortsMap.put(zmqTopic,String.valueOf(topicPublishingStartingPort));
-                    topicsAndNumOfSubs.put(zmqTopic,numOfSubscribers++);
+                    topicsAndNumOfSubs.put(zmqTopic,++numOfSubscribers);
                     response = request.put("port",String.valueOf(topicPublishingStartingPort)).toString();
 
                 }
