@@ -29,13 +29,11 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
                 while (true) {
                     try {
                         ConsumerRecords<KeyType, ValueType> consumerRecords = consumerRecordsList.take();
-                        executorService.execute(() -> {
-                            for (ConsumerRecord<KeyType, ValueType> consumerRecord : consumerRecords) {
-                                String strMsg = formatMessage(consumerRecord);
-                                logger.info("Sending message to subscribers :" + strMsg);
-                                consumer.accept((ValueType) strMsg); // The Java Consumer interface is a functional interface that represents a function that consumes a value without returning any value.
-                            }
-                        });
+                        for (ConsumerRecord<KeyType, ValueType> consumerRecord : consumerRecords) {
+                            String strMsg = formatMessage(consumerRecord);
+                            logger.info("Sending message to subscribers :" + strMsg);
+                            consumer.accept((ValueType) strMsg); // The Java Consumer interface is a functional interface that represents a function that consumes a value without returning any value.
+                        }
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }

@@ -31,7 +31,7 @@ public class KafkaMessagePublisher implements IPublisher
                                                         Runtime.getRuntime().availableProcessors(),
                                                         Runtime.getRuntime().availableProcessors(),
                                                         100,
-                                                        TimeUnit.MILLISECONDS,
+                                                        TimeUnit.SECONDS,
                                                         new ArrayBlockingQueue<>(10));
         this.TOPIC_NAME = topicName;
         ActiveConsumerRecordHandler<String,String> activeConsumerRecordHandler = new ActiveConsumerRecordHandler<>(executorService);

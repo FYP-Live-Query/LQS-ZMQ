@@ -82,7 +82,7 @@ public class ZMQServer {
                 } else {
 
                     port++;
-                    ZThread.fork(context, new KafkaMessagePublisher(request.getString("kafkaDebeziumServer"), request.getString("topic"), String.valueOf(port)));
+                    ZThread.fork(context, new KafkaMessagePublisher(request.getString("kafka.server.host"), request.getString("topic"), String.valueOf(port)));
                     logger.info(String.format("Publisher for topic '%s' created and live on port %d.", request.getString("topic"), port));
                     topicsPlusPortsMap.put(request.getString("topic"),String.valueOf(port));
                     response = request.put("port",String.valueOf(port)).toString();
