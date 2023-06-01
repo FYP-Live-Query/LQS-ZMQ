@@ -2,18 +2,16 @@ package com.mahesh;
 
 import com.mahesh.publisher.Kafka.KafkaMessagePublisher;
 import org.apache.tapestry5.json.JSONObject;
-import com.mahesh.publisher.BinLog.BinLogMessagePublisher;
 import org.zeromq.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mahesh.utils.ZMQBrokerConfig;
+import com.mahesh.utils.ZMQBrokerProperties;
 
-import java.io.IOException;
-import java.sql.*;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 
 public class ZMQServer {
 
@@ -33,14 +31,16 @@ public class ZMQServer {
         }
     }
 
-    public static void main(String[] argv) throws IOException, SQLException {
+    public static void main(String[] argv) {
+
+        ZMQBrokerConfig liveExtensionConfig = new ZMQBrokerConfig.ZMQBrokerConfigBuilder().build();
 
         Logger logger = LoggerFactory.getLogger(ZMQServer.class);
         logger.info("Starting ZMQServer.");
 
-        int ZMQServerPort = 5555;
+        int ZMQServerPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_BROKER_SERVER_HOST_PORT));
         Hashtable<String,String> topicsPlusPortsMap = new Hashtable<>();
-        int port = 60000;
+        int topicPublishingStartingPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_TOPIC_PUBLISHERS_STARTING_PORT));
 
         try (ZContext context = new ZContext()) {
 
@@ -48,7 +48,7 @@ public class ZMQServer {
             socket.bind("tcp://*:" + ZMQServerPort);
 
             logger.info(String.format("Listening on port %s.", ZMQServerPort));
-            logger.info(String.format("Now accepting connection on tcp://localhost:%s.", ZMQServerPort));
+            logger.info(String.format("Now accepting connection on tcp://%s:%s.", ZMQBrokerProperties.ZMQ_BROKER_SERVER_HOST_IP, ZMQServerPort));
 
             new Thread(() -> {
                 try {
@@ -57,8 +57,8 @@ public class ZMQServer {
                         Iterator<Map.Entry<String, String>> iterator = topicsPlusPortsMap.entrySet().iterator();
                         logger.info("live publishers listing.");
                         while (iterator.hasNext()) {
-                            Map.Entry<String, String> KV = iterator.next();
-                            logger.info("[topic:" + KV.getKey() + "] : [port :" + KV.getValue() + "]");
+                            Map.Entry<String, String> kv = iterator.next();
+                            logger.info(String.format("[topic : %s] : [port : %s]", kv.getValue(), kv.getKey()));
                         }
                     }
                 } catch (InterruptedException e) {
@@ -81,11 +81,15 @@ public class ZMQServer {
 
                 } else {
 
-                    port++;
-                    ZThread.fork(context, new KafkaMessagePublisher(request.getString("kafka.server.host"), request.getString("topic"), String.valueOf(port)));
-                    logger.info(String.format("Publisher for topic '%s' created and live on port %d.", request.getString("topic"), port));
-                    topicsPlusPortsMap.put(request.getString("topic"),String.valueOf(port));
-                    response = request.put("port",String.valueOf(port)).toString();
+                    topicPublishingStartingPort++;
+                    ZThread.fork(
+                            context,
+                            new KafkaMessagePublisher(request.getString("kafka.server.host"),
+                                    request.getString("topic"),
+                                    String.valueOf(topicPublishingStartingPort)));
+                    logger.info(String.format("Publisher for topic '%s' created and live on port %d.", request.getString("topic"), topicPublishingStartingPort));
+                    topicsPlusPortsMap.put(request.getString("topic"),String.valueOf(topicPublishingStartingPort));
+                    response = request.put("port",String.valueOf(topicPublishingStartingPort)).toString();
 
                 }
 
