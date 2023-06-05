@@ -6,6 +6,8 @@ import org.apache.tapestry5.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
@@ -33,6 +35,7 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
                             String strMsg = formatMessage(consumerRecord);
                             logger.info("Sending message to subscribers :" + strMsg);
                             consumer.accept((ValueType) strMsg); // The Java Consumer interface is a functional interface that represents a function that consumes a value without returning any value.
+
                         }
                     } catch (InterruptedException e) {
                         e.printStackTrace();
@@ -42,6 +45,7 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
         );
         thread.start();
         }
+
     private String formatMessage(ConsumerRecord<KeyType, ValueType> consumerRecord) {
         String stringJsonMsg = consumerRecord.value().toString();
         JSONObject jsonObject = new JSONObject(stringJsonMsg);
@@ -57,7 +61,7 @@ public class ActiveConsumerRecordHandler<KeyType, ValueType> {
         this.consumer = consumer;
     }
 
-    public void addConsumerRecords(ConsumerRecords<KeyType, ValueType> consumerRecords){
+    public void addConsumerRecords(ConsumerRecords<KeyType, ValueType> consumerRecords) {
         this.consumerRecordsList.add(consumerRecords);
     }
 }

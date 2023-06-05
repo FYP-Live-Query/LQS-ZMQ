@@ -1,7 +1,6 @@
 package com.mahesh;
 
 import com.mahesh.publisher.Kafka.KafkaMessagePublisher;
-import org.apache.tapestry5.json.JSONArray;
 import org.apache.tapestry5.json.JSONObject;
 import org.zeromq.*;
 
@@ -11,14 +10,58 @@ import com.mahesh.utils.ZMQBrokerConfig;
 import com.mahesh.utils.ZMQBrokerProperties;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 public class ZMQServer {
+    private static class Context {
+        static Logger logger = LoggerFactory.getLogger(ZMQServer.class);
+        static ZMQBrokerConfig liveExtensionConfig = new ZMQBrokerConfig.ZMQBrokerConfigBuilder().build();
+        static int ZMQServerPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_BROKER_SERVER_HOST_PORT));
+        static Hashtable<String,String> topicsPlusPortsMap = new Hashtable<>();
+        private static final HashMap<String, HashMap<String, String>> kafkaTopicsAndRequestedColumnsRoutingTopics = new HashMap<>();
+        static int topicPublishingStartingPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_TOPIC_PUBLISHERS_STARTING_PORT));
+
+        static void setupEnvForRequest(byte[] request) {
+            JSONObject json = new JSONObject(new String(request, ZMQ.CHARSET));
+            String kafkaTopic = json.getString(ZMQBrokerProperties.KAFKA_TOPIC);
+            String kafkaServerHost = json.getString(ZMQBrokerProperties.KAFKA_SERVER_HOST);
+            boolean columnFilteringEnabled = json.getBoolean(ZMQBrokerProperties.COLUMN_NAME_FILTERING_ENABLED);
+            List<String> StringColumnNames = new ArrayList<>(100);
+            json.getJSONArray(ZMQBrokerProperties.COLUMN_NAMES)
+                    .forEach(element -> {
+                        StringColumnNames.add(String.valueOf(element));
+                    });
+            String[] sortedStringColumnNames = Stream.of(StringColumnNames.toArray())
+                    .sorted()
+                    .toArray(String[]::new);
+            StringBuilder topicNameForThisListOfColumnNames = new StringBuilder();
+            Arrays.stream(sortedStringColumnNames).map(element -> {
+                topicNameForThisListOfColumnNames.append(element);
+                return null;
+            });
+            String value = UUID.fromString(topicNameForThisListOfColumnNames.toString()).toString();
+            if (kafkaTopicsAndRequestedColumnsRoutingTopics.containsKey(kafkaTopic)){
+                HashMap<String, String> existingRoutingTopics = kafkaTopicsAndRequestedColumnsRoutingTopics.get(kafkaTopic);
+                if (existingRoutingTopics.containsKey(topicNameForThisListOfColumnNames.toString())) {
+
+                } else {
+                    existingRoutingTopics.put(
+                            topicNameForThisListOfColumnNames.toString(),
+                            value
+                    );
+                }
+            } else {
+                HashMap<String, String> columnNamesRequested = new HashMap<>();
+                columnNamesRequested.put(
+                        topicNameForThisListOfColumnNames.toString(), value
+                );
+                kafkaTopicsAndRequestedColumnsRoutingTopics.put(kafkaTopic, columnNamesRequested);
+            }
+
+        }
+    }
 
     public static void main(String[] argv) {
-
-        Logger logger = LoggerFactory.getLogger(ZMQServer.class);
-        ZMQBrokerConfig liveExtensionConfig = new ZMQBrokerConfig.ZMQBrokerConfigBuilder().build();
-
         String banner = "\n\n" +
                 ",--,                                                                                                    \n" +
                 ",---.'|                                                                                                    \n" +
@@ -36,33 +79,31 @@ public class ZMQServer {
                 "             \\   \\ .'`--\"                      |   | ,'                      '--'       \\   \\  /           \n" +
                 "              `---`                            `----'                                    `----'            \n" +
                 "                                                                                                              \n"+
-                liveExtensionConfig.getProperty(ZMQBrokerProperties.APPLICATION_TITLE) + " " +
-                "v"+liveExtensionConfig.getProperty(ZMQBrokerProperties.APPLICATION_VERSION) + "\n" +
+                Context.liveExtensionConfig.getProperty(ZMQBrokerProperties.APPLICATION_TITLE) + " " +
+                "v"+Context.liveExtensionConfig.getProperty(ZMQBrokerProperties.APPLICATION_VERSION) + "\n" +
                 "Powered by ZeroMQ (TM).\n";
 
-        logger.info(banner);
-        logger.info("Starting ZMQServer.");
+        Context.logger.info(banner);
+        Context.logger.info("Starting ZMQServer.");
 
-        int ZMQServerPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_BROKER_SERVER_HOST_PORT));
-        Hashtable<String,String> topicsPlusPortsMap = new Hashtable<>();
-        int topicPublishingStartingPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_TOPIC_PUBLISHERS_STARTING_PORT));
+
 
         try (ZContext context = new ZContext()) {
             ZMQ.Socket socket = context.createSocket(SocketType.REP);
-            socket.bind("tcp://*:" + ZMQServerPort);
+            socket.bind("tcp://*:" + Context.ZMQServerPort);
 
-            logger.info(String.format("Listening on port %s.", ZMQServerPort));
-            logger.info(String.format("Now accepting connection on tcp://%s:%s.", liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_BROKER_SERVER_HOST_IP), ZMQServerPort));
+            Context.logger.info(String.format("Listening on port %s.", Context.ZMQServerPort));
+            Context.logger.info(String.format("Now accepting connection on tcp://%s:%s.", Context.liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_BROKER_SERVER_HOST_IP), Context.ZMQServerPort));
 
             new Thread(() -> {
                 try {
                     while (!Thread.interrupted()) {
                         Thread.sleep(100_000);
-                        Iterator<Map.Entry<String, String>> iterator = topicsPlusPortsMap.entrySet().iterator();
-                        logger.info("live publishers listing.");
+                        Iterator<Map.Entry<String, String>> iterator = Context.topicsPlusPortsMap.entrySet().iterator();
+                        Context.logger.info("live publishers listing.");
                         while (iterator.hasNext()) {
                             Map.Entry<String, String> kv = iterator.next();
-                            logger.info(String.format("[topic : %s] : [port : %s]", kv.getKey(), kv.getValue()));
+                            Context.logger.info(String.format("[topic : %s] : [port : %s]", kv.getKey(), kv.getValue()));
                         }
                     }
                 } catch (InterruptedException e) {
@@ -73,8 +114,8 @@ public class ZMQServer {
             while (!Thread.currentThread().isInterrupted()) {
 
                 byte[] reply = socket.recv(0);
-                logger.info("Subscriber connected.");
-                logger.info("Received message " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
+                Context.logger.info("Subscriber connected.");
+                Context.logger.info("Received message " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
 
                 String response;
 
@@ -89,30 +130,30 @@ public class ZMQServer {
                         });
                 System.out.println(StringColumnNames);
 
-                if (topicsPlusPortsMap.containsKey(kafkaTopic)) {
+                if (Context.topicsPlusPortsMap.containsKey(kafkaTopic)) {
 
-                    logger.info(String.format("Kafka Client for Topic '%s' already created ", kafkaTopic));
-                    response = request.put(ZMQBrokerProperties.ZMQ_TOPIC_PORT, topicsPlusPortsMap.get(kafkaTopic)).toString();
+                    Context.logger.info(String.format("Kafka Client for Topic '%s' already created ", kafkaTopic));
+                    response = request.put(ZMQBrokerProperties.ZMQ_TOPIC_PORT, Context.topicsPlusPortsMap.get(kafkaTopic)).toString();
 
                 } else {
 
-                    topicPublishingStartingPort++;
+                    Context.topicPublishingStartingPort++;
 
                     ZThread.fork(
                             context,
                             new KafkaMessagePublisher(
                                     kafkaServerHost,
                                     kafkaTopic,
-                                    String.valueOf(topicPublishingStartingPort)));
+                                    String.valueOf(Context.topicPublishingStartingPort)));
 
-                    logger.info(
+                    Context.logger.info(
                             String.format("Kafka Client for topic '%s' created and live on port %d.",
                             kafkaTopic,
-                            topicPublishingStartingPort
+                                    Context.topicPublishingStartingPort
                             ));
 
-                    topicsPlusPortsMap.put(kafkaTopic, String.valueOf(topicPublishingStartingPort));
-                    response = request.put(ZMQBrokerProperties.ZMQ_TOPIC_PORT, String.valueOf(topicPublishingStartingPort)).toString();
+                    Context.topicsPlusPortsMap.put(kafkaTopic, String.valueOf(Context.topicPublishingStartingPort));
+                    response = request.put(ZMQBrokerProperties.ZMQ_TOPIC_PORT, String.valueOf(Context.topicPublishingStartingPort)).toString();
 
                 }
 
