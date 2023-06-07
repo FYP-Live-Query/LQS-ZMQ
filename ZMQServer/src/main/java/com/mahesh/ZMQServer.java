@@ -22,40 +22,46 @@ public class ZMQServer {
         static int topicPublishingStartingPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_TOPIC_PUBLISHERS_STARTING_PORT));
 
         static void setupEnvForRequest(byte[] request) {
-            JSONObject json = new JSONObject(new String(request, ZMQ.CHARSET));
-            String kafkaTopic = json.getString(ZMQBrokerProperties.KAFKA_TOPIC);
-            String kafkaServerHost = json.getString(ZMQBrokerProperties.KAFKA_SERVER_HOST);
-            boolean columnFilteringEnabled = json.getBoolean(ZMQBrokerProperties.COLUMN_NAME_FILTERING_ENABLED);
+            JSONObject jsonRequest = new JSONObject(new String(request, ZMQ.CHARSET));
+            String kafkaTopic = jsonRequest.getString(ZMQBrokerProperties.KAFKA_TOPIC);
+            String kafkaServerHost = jsonRequest.getString(ZMQBrokerProperties.KAFKA_SERVER_HOST);
+            boolean columnFilteringEnabled = jsonRequest.getBoolean(ZMQBrokerProperties.COLUMN_NAME_FILTERING_ENABLED);
             List<String> StringColumnNames = new ArrayList<>(100);
-            json.getJSONArray(ZMQBrokerProperties.COLUMN_NAMES)
+            jsonRequest.getJSONArray(ZMQBrokerProperties.COLUMN_NAMES)
                     .forEach(element -> {
                         StringColumnNames.add(String.valueOf(element));
                     });
+
             String[] sortedStringColumnNames = Stream.of(StringColumnNames.toArray())
                     .sorted()
                     .toArray(String[]::new);
+
             StringBuilder topicNameForThisListOfColumnNames = new StringBuilder();
+
             Arrays.stream(sortedStringColumnNames).map(element -> {
                 topicNameForThisListOfColumnNames.append(element);
                 return null;
             });
-            String value = UUID.fromString(topicNameForThisListOfColumnNames.toString()).toString();
+
+            String topicPostFix = UUID.fromString(topicNameForThisListOfColumnNames.toString()).toString();
             if (kafkaTopicsAndRequestedColumnsRoutingTopics.containsKey(kafkaTopic)){
                 HashMap<String, String> existingRoutingTopics = kafkaTopicsAndRequestedColumnsRoutingTopics.get(kafkaTopic);
                 if (existingRoutingTopics.containsKey(topicNameForThisListOfColumnNames.toString())) {
-
+                    // just return topic name
                 } else {
                     existingRoutingTopics.put(
                             topicNameForThisListOfColumnNames.toString(),
-                            value
+                            topicPostFix
                     );
+                    // add a filter to publisher and // just return topic name
                 }
             } else {
                 HashMap<String, String> columnNamesRequested = new HashMap<>();
                 columnNamesRequested.put(
-                        topicNameForThisListOfColumnNames.toString(), value
+                        topicNameForThisListOfColumnNames.toString(), topicPostFix
                 );
                 kafkaTopicsAndRequestedColumnsRoutingTopics.put(kafkaTopic, columnNamesRequested);
+                // create publisher and add a filter to publisher and just return topic name
             }
 
         }
