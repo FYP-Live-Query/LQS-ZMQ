@@ -53,7 +53,7 @@ public class ZMQServer {
                             topicNameForThisListOfColumnNames.toString(),
                             topicPostFix
                     );
-                    // add a filter to publisher and // just return topic name
+                    // add a filter to publisher and just return topic name
                 }
             } else {
                 HashMap<String, String> columnNamesRequested = new HashMap<>();
