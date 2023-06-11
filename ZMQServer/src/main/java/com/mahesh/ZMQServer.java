@@ -31,7 +31,7 @@ public class ZMQServer {
         }
     }
 
-    public static void main(String[] argv) {
+    public static void main(String[] argv) throws Exception {
 
         ZMQBrokerConfig liveExtensionConfig = new ZMQBrokerConfig.ZMQBrokerConfigBuilder().build();
 
@@ -40,7 +40,16 @@ public class ZMQServer {
 
         int ZMQServerPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_BROKER_SERVER_HOST_PORT));
         Hashtable<String,String> topicsPlusPortsMap = new Hashtable<>();
+        Hashtable<String,Integer> topicsAndNumOfSubs = new Hashtable<>();
+
         int topicPublishingStartingPort = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_TOPIC_PUBLISHERS_STARTING_PORT));
+        double subscribersLoadFactor = Double.parseDouble(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_TOPIC_SUBSCRIBERS_LOAD_FACTOR));
+        double idealNumOfSubscribers = Integer.parseInt(liveExtensionConfig.getProperty(ZMQBrokerProperties.ZMQ_IDEAL_NUM_OF_SUBSCRIBERS_PER_TOPIC));
+
+        if(subscribersLoadFactor > 1 || idealNumOfSubscribers <= 0){
+            throw new Exception("zmq.topic.subcriber.load.factor should be between 0.0 and 1.0 and\n" +
+                    "zmq.ideal.subscriber.load.per.topic should be > 0\n");
+        }
 
         try (ZContext context = new ZContext()) {
 
@@ -69,12 +78,27 @@ public class ZMQServer {
             while (!Thread.currentThread().isInterrupted()) {
 
                 byte[] reply = socket.recv(0);
+
                 logger.info("Subscriber connected.");
                 logger.info("Received message " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
+
                 String response;
                 JSONObject request = new JSONObject(new String(reply, ZMQ.CHARSET));
+                int numOfSubscribers = 0;
+                String zmqTopic = request.getString("topic");
 
-                if (topicsPlusPortsMap.containsKey(request.getString("topic"))) {
+                if (topicsPlusPortsMap.containsKey(zmqTopic)) {
+                    numOfSubscribers = topicsAndNumOfSubs.get(zmqTopic);
+                    if(numOfSubscribers >= subscribersLoadFactor * idealNumOfSubscribers) {
+                        topicPublishingStartingPort++;
+                        ZThread.fork(
+                                context,
+                                new KafkaMessagePublisher(request.getString("kafka.server.host"),
+                                        zmqTopic,
+                                        String.valueOf(topicPublishingStartingPort)));
+                        topicsPlusPortsMap.put(zmqTopic,topicsPlusPortsMap.get(zmqTopic) + "," + String.valueOf(topicPublishingStartingPort));
+                        topicsAndNumOfSubs.put(zmqTopic,numOfSubscribers++);
+                    }
 
                     logger.info(String.format("Topic '%s' already created ", request.getString("topic")));
                     response = request.put("port",topicsPlusPortsMap.get(request.getString("topic"))).toString();
@@ -85,10 +109,11 @@ public class ZMQServer {
                     ZThread.fork(
                             context,
                             new KafkaMessagePublisher(request.getString("kafka.server.host"),
-                                    request.getString("topic"),
+                                    zmqTopic,
                                     String.valueOf(topicPublishingStartingPort)));
                     logger.info(String.format("Publisher for topic '%s' created and live on port %d.", request.getString("topic"), topicPublishingStartingPort));
-                    topicsPlusPortsMap.put(request.getString("topic"),String.valueOf(topicPublishingStartingPort));
+                    topicsPlusPortsMap.put(zmqTopic,String.valueOf(topicPublishingStartingPort));
+                    topicsAndNumOfSubs.put(zmqTopic,numOfSubscribers++);
                     response = request.put("port",String.valueOf(topicPublishingStartingPort)).toString();
 
                 }
