@@ -15,6 +15,22 @@ import java.util.Map;
 
 public class ZMQServer {
 
+    private static class Listener implements ZThread.IAttachedRunnable
+    {
+        @Override
+        public void run(Object[] args, ZContext ctx, ZMQ.Socket pipe)
+        {
+//              Print everything that arrives on pipe
+            while (true) {
+                ZFrame frame = ZFrame.recvFrame(pipe);
+                if (frame == null)
+                    break; //  Interrupted
+                frame.print(null);
+                frame.destroy();
+            }
+        }
+    }
+
     public static void main(String[] argv) {
 
         ZMQBrokerConfig liveExtensionConfig = new ZMQBrokerConfig.ZMQBrokerConfigBuilder().build();
